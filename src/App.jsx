@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import DxfParser from 'dxf-parser';
 import { Upload, FileText, AlertCircle, CheckCircle, X, Loader2, Table } from 'lucide-react';
+// Removed import of gebElements, will use parsedData
 
 const DxfFileParser = () => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [parsedData, setParsedData] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [showTableModal, setShowTableModal] = useState(false);
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -40,15 +39,18 @@ const DxfFileParser = () => {
     }
 
     setSelectedFile(file);
+    // Automatically parse the file after selection
+    parseDxfFile(file);
   };
 
-  const parseDxfFile = async () => {
-    if (!selectedFile) {
+  // Update parseDxfFile to accept a file argument (for auto-parse)
+  const parseDxfFile = async (fileArg) => {
+    const fileToParse = fileArg || selectedFile;
+    if (!fileToParse) {
       setError('Please select a DXF file first');
       return;
     }
 
-    setIsLoading(true);
     setError(null);
     setSuccess(false);
     setParsedData(null);
@@ -58,8 +60,8 @@ const DxfFileParser = () => {
       const fileContent = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(new Error('Failed to read file'));
-        reader.readAsText(selectedFile);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(fileToParse);
       });
 
       // Parse DXF content using dxf-parser
@@ -79,8 +81,6 @@ const DxfFileParser = () => {
       setError(`Parsing failed: ${err.message || 'Unknown error occurred'}`);
       setParsedData(null);
       setSuccess(false);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -89,9 +89,7 @@ const DxfFileParser = () => {
     setParsedData(null);
     setError(null);
     setSuccess(false);
-    setIsLoading(false);
     setExpandedSections({});
-    setShowTableModal(false);
     
     // Reset file input
     const fileInput = document.getElementById('dxf-file-input');
@@ -108,39 +106,6 @@ const DxfFileParser = () => {
       ...prev,
       [sectionId]: !prev[sectionId]
     }));
-  };
-
-  const generateEntityStats = () => {
-    if (!parsedData || !parsedData.entities) return [];
-    
-    const entityCounts = {};
-    let totalCount = 0;
-    
-    parsedData.entities.forEach(entity => {
-      const type = entity.type || 'Unknown';
-      entityCounts[type] = (entityCounts[type] || 0) + 1;
-      totalCount++;
-    });
-    
-    // Convert to array and sort by count (descending)
-    const stats = Object.entries(entityCounts).map(([type, count]) => ({
-      type,
-      count,
-      percentage: ((count / totalCount) * 100).toFixed(1)
-    }));
-    
-    // Add total row at the beginning
-    stats.unshift({
-      type: 'All',
-      count: totalCount,
-      percentage: '100.0'
-    });
-    
-    return stats.sort((a, b) => {
-      if (a.type === 'All') return -1;
-      if (b.type === 'All') return 1;
-      return b.count - a.count;
-    });
   };
 
   const renderDataSection = (title, data, sectionId, isExpandable = true) => {
@@ -215,29 +180,6 @@ const DxfFileParser = () => {
       {/* Action Buttons */}
       <div className="flex space-x-4 mb-6">
         <button
-          onClick={parseDxfFile}
-          disabled={!selectedFile || isLoading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-6 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileText className="h-4 w-4" />
-          )}
-          <span>{isLoading ? 'Parsing...' : 'Parse DXF File'}</span>
-        </button>
-
-        {parsedData && (
-          <button
-            onClick={() => setShowTableModal(true)}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-lg flex items-center space-x-2 transition-colors"
-          >
-            <Table className="h-4 w-4" />
-            <span>View Entity Table</span>
-          </button>
-        )}
-
-        <button
           onClick={clearAll}
           className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-6 rounded-lg flex items-center space-x-2 transition-colors"
         >
@@ -272,28 +214,6 @@ const DxfFileParser = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Parsed DXF Data</h2>
           
-          {/* Summary Information */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-medium text-blue-800">Entities</h3>
-              <p className="text-2xl font-bold text-blue-600">
-                {parsedData.entities ? parsedData.entities.length : 0}
-              </p>
-            </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="font-medium text-green-800">Layers</h3>
-              <p className="text-2xl font-bold text-green-600">
-                {parsedData.tables && parsedData.tables.layer ? Object.keys(parsedData.tables.layer.layers).length : 0}
-              </p>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <h3 className="font-medium text-purple-800">Blocks</h3>
-              <p className="text-2xl font-bold text-purple-600">
-                {parsedData.blocks ? Object.keys(parsedData.blocks).length : 0}
-              </p>
-            </div>
-          </div>
-
           {/* Detailed Data Sections */}
           <div className="space-y-4">
             {parsedData.header && renderDataSection('Header Information', parsedData.header, 'header')}
@@ -339,7 +259,7 @@ const DxfFileParser = () => {
                       </button>
                     </button>
                     {isExpanded && (
-                      <div className="p-4">
+                      <div className="p-4 max-h-96 overflow-auto">
                         <ul className="list-disc pl-6">
                           {gebLayers.map(([layerName, layerData]) => (
                             <li key={layerName} className="mb-2">
@@ -413,7 +333,7 @@ const DxfFileParser = () => {
                     </button>
                   </button>
                   {isExpanded && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 max-h-96 overflow-auto">
                       {gebEntities.length > 0 && (
                         <div>
                           <div className="font-semibold text-orange-900 mb-2">Entities ({gebEntities.length})</div>
@@ -529,79 +449,60 @@ const DxfFileParser = () => {
           </div>
         </div>
       )}
-
-      {/* Entity Table Modal */}
-      {showTableModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-800">Entity Type Statistics</h2>
-              <button
-                onClick={() => setShowTableModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
+      {/* Article Code Block for GEB/GEBERIT text fields from parsed DXF data */}
+      {parsedData && (() => {
+        // Helper: is GEB/Geberit related if any string field contains GEB or GEBERIT
+        const isGebRelated = obj => Object.values(obj).some(
+          v => typeof v === 'string' && /GEBRIT|GEB/i.test(v)
+        );
+        // Helper: extract article code (substring with GEB or GEBRIT and following words/numbers)
+        const extractGebCode = text => {
+          if (typeof text !== 'string') return null;
+          // Match GEB or GEBRIT, followed by up to 20 word/hyphen/space chars, then a number (with optional decimal)
+          const match = text.match(/(GEB(?:RIT)?(?:[\w\- ]{0,20})?\d+[.\d]*)/i);
+          return match ? match[0].trim() : null;
+        };
+        const gebCodes = [];
+        // From entities
+        if (Array.isArray(parsedData.entities)) {
+          parsedData.entities.forEach(entity => {
+            if (isGebRelated(entity) && entity.text) {
+              const code = extractGebCode(entity.text);
+              if (code) gebCodes.push(code);
+            }
+          });
+        }
+        // From blocks
+        if (parsedData.blocks && typeof parsedData.blocks === 'object') {
+          Object.values(parsedData.blocks).forEach(block => {
+            if (isGebRelated(block) && block.text) {
+              const code = extractGebCode(block.text);
+              if (code) gebCodes.push(code);
+            }
+            if (block.entities && Array.isArray(block.entities)) {
+              block.entities.forEach(e => {
+                if (isGebRelated(e) && e.text) {
+                  const code = extractGebCode(e.text);
+                  if (code) gebCodes.push(code);
+                }
+              });
+            }
+          });
+        }
+        if (gebCodes.length === 0) return null;
+        return (
+          <div className="border border-gray-400 rounded-lg bg-gray-50 mb-4">
+            <div className="px-4 py-3 font-medium text-gray-800 bg-gray-100 rounded-t-lg">
+              GEB / GEBERIT Article Codes from DXF
             </div>
-            
-            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Entity Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Count
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Percentage
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bar Chart
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {generateEntityStats().map((stat, index) => (
-                      <tr key={index} className={`hover:bg-gray-50 ${stat.type === 'All' ? 'bg-blue-50 font-semibold' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {stat.type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {stat.count.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {stat.percentage}%
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center">
-                            <div className="w-32 bg-gray-200 rounded-full h-2 mr-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full" 
-                                style={{ width: `${stat.percentage}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-xs text-gray-500 w-8">
-                              {stat.percentage}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              <div className="mt-6 text-sm text-gray-600">
-                <p><strong>Total Entities:</strong> {generateEntityStats().find(s => s.type === 'All')?.count || 0}</p>
-                <p><strong>Unique Entity Types:</strong> {generateEntityStats().length - 1}</p>
-              </div>
+            <div className="p-4 max-h-96 overflow-auto">
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                {gebCodes.map(t => `• ${t}`).join('\n')}
+              </pre>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

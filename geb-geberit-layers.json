@@ -1,0 +1,93 @@
+{
+  "GEB": {
+    "name": "GEB",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 7,
+    "color": 16777215
+  },
+  "GEBERIT 50 DIA WASTE PIPE": {
+    "name": "GEBERIT 50 DIA WASTE PIPE",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 34,
+    "color": 10046464
+  },
+  "GEBERIT 110 DIA SOIL PIPE": {
+    "name": "GEBERIT 110 DIA SOIL PIPE",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 34,
+    "color": 10046464
+  },
+  "GEB-TEXT": {
+    "name": "GEB-TEXT",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 7,
+    "color": 16777215
+  },
+  "GEBERIT FIXTURES": {
+    "name": "GEBERIT FIXTURES",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 7,
+    "color": 16777215
+  },
+  "GEB-KONTUR-A": {
+    "name": "GEB-KONTUR-A",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 5,
+    "color": 255
+  },
+  "GEB-BEZUG": {
+    "name": "GEB-BEZUG",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 2,
+    "color": 16776960
+  },
+  "GEB-SYMMETRIE": {
+    "name": "GEB-SYMMETRIE",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 3,
+    "color": 65280
+  },
+  "GEB-ART-NR": {
+    "name": "GEB-ART-NR",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 1,
+    "color": 16711680
+  },
+  "GEBERIT FITTINGS": {
+    "name": "GEBERIT FITTINGS",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 7,
+    "color": 16777215
+  },
+  "GEB-VERDECKT": {
+    "name": "GEB-VERDECKT",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 2,
+    "color": 16776960
+  },
+  "GEB-KONTUR-I": {
+    "name": "GEB-KONTUR-I",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 1,
+    "color": 16711680
+  },
+  "Geberit 50mm waste pipe for WB": {
+    "name": "Geberit 50mm waste pipe for WB",
+    "frozen": false,
+    "visible": true,
+    "colorIndex": 6,
+    "color": 16711935
+  }
+}
