@@ -9,6 +9,7 @@ const DxfFileParser = () => {
   const [parsedData, setParsedData] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Helper function to clean DXF text formatting codes
   const cleanDxfText = (text) => {
@@ -84,7 +85,7 @@ const DxfFileParser = () => {
       return;
     }
 
-
+    setLoading(true);
     setError(null);
     setSuccess(false);
     setParsedData(null);
@@ -113,6 +114,7 @@ const DxfFileParser = () => {
       setParsedData(dxfData);
       setSuccess(true);
       setError(null);
+      setLoading(false);
 
 
     } catch (err) {
@@ -120,6 +122,7 @@ const DxfFileParser = () => {
       setError(`Parsing failed: ${err.message || 'Unknown error occurred'}`);
       setParsedData(null);
       setSuccess(false);
+      setLoading(false);
     }
   };
 
@@ -133,41 +136,6 @@ const DxfFileParser = () => {
       ...prev,
       [sectionId]: !prev[sectionId]
     }));
-  };
-
-
-  const renderDataSection = (title, data, sectionId, isExpandable = true) => {
-    if (!data) return null;
-
-
-    const dataString = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
-    const isLarge = dataString.length > 500;
-    const isExpanded = expandedSections[sectionId] || false;
-
-
-    return (
-      <div className="border border-gray-300 rounded-lg mb-4">
-        <button
-          onClick={() => isExpandable && toggleSection(sectionId)}
-          className={`w-full px-4 py-3 text-left font-medium text-gray-700 bg-gray-50 rounded-t-lg hover:bg-gray-100 flex justify-between items-center ${!isExpandable ? 'cursor-default' : 'cursor-pointer'}`}
-        >
-          <span>{title}</span>
-          {isExpandable && (
-            <span className="text-sm text-gray-500">
-              {isExpanded ? 'Click to collapse' : 'Click to expand'}
-            </span>
-          )}
-        </button>
-        
-        {(!isExpandable || isExpanded) && (
-          <div className="p-4 bg-white rounded-b-lg">
-            <pre className={`text-sm text-gray-700 whitespace-pre-wrap overflow-auto ${isLarge ? 'max-h-96' : ''}`}>
-              {dataString}
-            </pre>
-          </div>
-        )}
-      </div>
-    );
   };
 
 
@@ -212,6 +180,12 @@ const DxfFileParser = () => {
 
 
       {/* Status Messages */}
+      {loading && (
+        <div className="flex justify-center items-center mb-6">
+          <Loader2 className="animate-spin h-8 w-8 text-blue-500 mr-2" />
+          <span className="text-blue-700 font-medium">Parsing DXF file, please wait...</span>
+        </div>
+      )}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
@@ -241,7 +215,50 @@ const DxfFileParser = () => {
           
           {/* Detailed Data Sections */}
           <div className="space-y-4">
-            {parsedData.header && renderDataSection('Header Information', parsedData.header, 'header')}
+            {parsedData.header && (
+              (() => {
+                const sectionId = 'header';
+                const isExpanded = expandedSections[sectionId] || false;
+                const handleDownloadHeader = (e) => {
+                  e.stopPropagation();
+                  const blob = new Blob([JSON.stringify(parsedData.header, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'dxf-header-information.json';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                };
+                return (
+                  <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
+                    >
+                      <span className="text-base font-bold text-gray-800">Header Information</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                        <button
+                          onClick={handleDownloadHeader}
+                          className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                        >
+                          Download JSON
+                        </button>
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="p-4 bg-white rounded-b-lg">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
+                          {JSON.stringify(parsedData.header, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            )}
             
             {/* GEB/GEBERIT Layers Section */}
             {parsedData.tables && parsedData.tables.layer && (
@@ -251,8 +268,11 @@ const DxfFileParser = () => {
                   ([layerName]) => /GEBRIT|GEB/i.test(layerName)
                 );
                 if (gebLayers.length === 0) return null;
-                // Download handler for GEB/GEBERIT Layers
-                const handleDownloadGebLayers = () => {
+                const sectionId = 'geb-geberit-layers';
+                const isLarge = gebLayers.length > 5;
+                const isExpanded = expandedSections[sectionId] ?? !isLarge;
+                const handleDownloadGebLayers = (e) => {
+                  e.stopPropagation();
                   const data = Object.fromEntries(gebLayers);
                   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
@@ -264,33 +284,31 @@ const DxfFileParser = () => {
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
                 };
-                // Expand/collapse logic
-                const sectionId = 'geb-geberit-layers';
-                const isLarge = gebLayers.length > 5;
-                const isExpanded = expandedSections[sectionId] ?? !isLarge;
                 return (
-                  <div className="border border-yellow-300 rounded-lg mb-4 bg-yellow-50">
+                  <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
                     <button
                       onClick={() => toggleSection(sectionId)}
-                      className="flex items-center justify-between w-full px-4 py-3 font-medium text-yellow-800 bg-yellow-100 rounded-t-lg hover:bg-yellow-200 focus:outline-none"
+                      className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                     >
-                      <span>GEB / GEBERIT Layers ({gebLayers.length})</span>
-                      <span className="text-sm text-yellow-700">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDownloadGebLayers(); }}
-                        className="ml-4 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold py-1 px-3 rounded text-xs shadow"
-                      >
-                        Download JSON
-                      </button>
+                      <span className="text-base font-bold text-gray-800">GEB / GEBERIT Layers ({gebLayers.length})</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                        <button
+                          onClick={handleDownloadGebLayers}
+                          className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                        >
+                          Download JSON
+                        </button>
+                      </span>
                     </button>
                     {isExpanded && (
                       <div className="p-4 max-h-96 overflow-auto">
                         <ul className="list-disc pl-6">
                           {gebLayers.map(([layerName, layerData]) => (
                             <li key={layerName} className="mb-2">
-                              <span className="font-semibold text-yellow-900">{layerName}</span>
+                              <span className="font-semibold text-gray-800">{layerName}</span>
                               {layerData && (
-                                <pre className="text-xs text-gray-700 bg-yellow-200 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
+                                <pre className="text-xs text-gray-700 bg-gray-100 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
                                   {JSON.stringify(layerData, null, 2)}
                                 </pre>
                               )}
@@ -322,8 +340,11 @@ const DxfFileParser = () => {
                 ([layerName, layerData]) => containsGEB(layerName) || JSON.stringify(layerData).match(/GEBRIT|GEB/i)
               );
               if (gebEntities.length === 0 && gebBlocks.length === 0 && gebLayers.length === 0) return null;
-              // Download handler for All Elements
-              const handleDownloadAllGeb = () => {
+              const sectionId = 'all-geb-geberit-elements';
+              const isLarge = gebEntities.length + gebBlocks.length + gebLayers.length > 10;
+              const isExpanded = expandedSections[sectionId] ?? !isLarge;
+              const handleDownloadAllGeb = (e) => {
+                e.stopPropagation();
                 const data = {
                   entities: gebEntities,
                   blocks: Object.fromEntries(gebBlocks),
@@ -339,34 +360,32 @@ const DxfFileParser = () => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
               };
-              // Expand/collapse logic
-              const sectionId = 'all-geb-geberit-elements';
-              const isLarge = gebEntities.length + gebBlocks.length + gebLayers.length > 10;
-              const isExpanded = expandedSections[sectionId] ?? !isLarge;
               return (
-                <div className="border border-orange-300 rounded-lg mb-4 bg-orange-50">
+                <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
                   <button
                     onClick={() => toggleSection(sectionId)}
-                    className="flex items-center justify-between w-full px-4 py-3 font-medium text-orange-800 bg-orange-100 rounded-t-lg hover:bg-orange-200 focus:outline-none"
+                    className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                   >
-                    <span>All Elements Related to GEB / GEBERIT</span>
-                    <span className="text-sm text-orange-700">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDownloadAllGeb(); }}
-                      className="ml-4 bg-orange-400 hover:bg-orange-500 text-orange-900 font-semibold py-1 px-3 rounded text-xs shadow"
-                    >
-                      Download JSON
-                    </button>
+                    <span className="text-base font-bold text-gray-800">All Elements Related to GEB / GEBERIT</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                      <button
+                        onClick={handleDownloadAllGeb}
+                        className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                      >
+                        Download JSON
+                      </button>
+                    </span>
                   </button>
                   {isExpanded && (
                     <div className="p-4 space-y-4 max-h-96 overflow-auto">
                       {gebEntities.length > 0 && (
                         <div>
-                          <div className="font-semibold text-orange-900 mb-2">Entities ({gebEntities.length})</div>
+                          <div className="font-semibold text-gray-800 mb-2">Entities ({gebEntities.length})</div>
                           <ul className="list-decimal pl-6">
                             {gebEntities.map((entity, i) => (
                               <li key={entity.handle || i} className="mb-2">
-                                <pre className="text-xs text-gray-700 bg-orange-200 rounded p-2 whitespace-pre-wrap overflow-auto max-w-full">
+                                <pre className="text-xs text-gray-700 bg-gray-100 rounded p-2 whitespace-pre-wrap overflow-auto max-w-full">
                                   {JSON.stringify(entity, null, 2)}
                                 </pre>
                               </li>
@@ -376,12 +395,12 @@ const DxfFileParser = () => {
                       )}
                       {gebBlocks.length > 0 && (
                         <div>
-                          <div className="font-semibold text-orange-900 mb-2">Blocks ({gebBlocks.length})</div>
+                          <div className="font-semibold text-gray-800 mb-2">Blocks ({gebBlocks.length})</div>
                           <ul className="list-decimal pl-6">
                             {gebBlocks.map(([blockName, blockData]) => (
                               <li key={blockName} className="mb-2">
                                 <span className="font-semibold">{blockName}</span>
-                                <pre className="text-xs text-gray-700 bg-orange-200 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
+                                <pre className="text-xs text-gray-700 bg-gray-100 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
                                   {JSON.stringify(blockData, null, 2)}
                                 </pre>
                               </li>
@@ -391,12 +410,12 @@ const DxfFileParser = () => {
                       )}
                       {gebLayers.length > 0 && (
                         <div>
-                          <div className="font-semibold text-orange-900 mb-2">Layers ({gebLayers.length})</div>
+                          <div className="font-semibold text-gray-800 mb-2">Layers ({gebLayers.length})</div>
                           <ul className="list-decimal pl-6">
                             {gebLayers.map(([layerName, layerData]) => (
                               <li key={layerName} className="mb-2">
                                 <span className="font-semibold">{layerName}</span>
-                                <pre className="text-xs text-gray-700 bg-orange-200 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
+                                <pre className="text-xs text-gray-700 bg-gray-100 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-w-full">
                                   {JSON.stringify(layerData, null, 2)}
                                 </pre>
                               </li>
@@ -412,65 +431,48 @@ const DxfFileParser = () => {
             
             {/* Full Data Structure */}
             <div>
-              {renderDataSection('Complete Data Structure', parsedData, 'complete')}
-              <div className="flex gap-4 mt-2">
-                <button
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'dxf-parsed-data.json';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
-                >
-                  Download JSON
-                </button>
-                <button
-                  onClick={() => {
-                    // Flatten parsedData for CSV
-                    const flatten = (obj, prefix = '', res = {}) => {
-                      for (const key in obj) {
-                        const value = obj[key];
-                        const newKey = prefix ? `${prefix}.${key}` : key;
-                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                          flatten(value, newKey, res);
-                        } else {
-                          res[newKey] = Array.isArray(value) ? JSON.stringify(value) : value;
-                        }
-                      }
-                      return res;
-                    };
-                    const rows = [];
-                    if (Array.isArray(parsedData.entities)) {
-                      parsedData.entities.forEach((entity, i) => {
-                        rows.push(flatten(entity, `entity[${i}]`));
-                      });
-                    }
-                    if (rows.length === 0) rows.push(flatten(parsedData));
-                    const headers = Array.from(new Set(rows.flatMap(row => Object.keys(row))));
-                    const csv = [headers.join(',')].concat(
-                      rows.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','))
-                    ).join('\n');
-                    const blob = new Blob([csv], { type: 'text/csv' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'dxf-parsed-data.csv';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
-                >
-                  Download CSV
-                </button>
-              </div>
+              {(() => {
+                const sectionId = 'complete';
+                const isExpanded = expandedSections[sectionId] || false;
+                const handleDownloadComplete = (e) => {
+                  e.stopPropagation();
+                  const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'dxf-parsed-data.json';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                };
+                return (
+                  <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
+                    >
+                      <span className="text-base font-bold text-gray-800">Complete Data Structure</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                        <button
+                          onClick={handleDownloadComplete}
+                          className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                        >
+                          Download JSON
+                        </button>
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="p-4 bg-white rounded-b-lg">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
+                          {JSON.stringify(parsedData, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
