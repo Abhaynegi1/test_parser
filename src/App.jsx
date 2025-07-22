@@ -63,7 +63,7 @@ const DxfFileParser = () => {
 
 
     // Validate file size (optional - prevent very large files)
-    const maxSize = 150 * 1024 * 1024; // 150MB
+    const maxSize = 200 * 1024 * 1024; // 150MB
     if (file.size > maxSize) {
       setError('File size too large. Please select a file smaller than 150MB.');
       setSelectedFile(null);
@@ -429,7 +429,7 @@ const DxfFileParser = () => {
               );
             })()}
             
-            {/* Full Data Structure */}
+            {/* Complete Data Structure */}
             <div>
               {(() => {
                 const sectionId = 'complete';
@@ -474,67 +474,73 @@ const DxfFileParser = () => {
                 );
               })()}
             </div>
+            
+            {/* Article Code Block for GEB/GEBERIT text fields from parsed DXF data */}
+            {parsedData && (() => {
+              // Helper: check if layer name contains GEB or GEBERIT
+              const isGebLayer = layerName => typeof layerName === 'string' && /GEBRIT|GEB/i.test(layerName);
+              const gebCodes = [];
+              // From entities - check if entity's layer is GEB/GEBERIT related
+              if (Array.isArray(parsedData.entities)) {
+                parsedData.entities.forEach(entity => {
+                  if (entity.layer && isGebLayer(entity.layer) && entity.text) {
+                    // Clean and extract text from entities on GEB/GEBERIT layers
+                    const cleanedText = cleanDxfText(entity.text);
+                    if (cleanedText) gebCodes.push(cleanedText);
+                  }
+                });
+              }
+              // From blocks - check if block's layer is GEB/GEBERIT related or block name contains GEB/GEBERIT
+              if (parsedData.blocks && typeof parsedData.blocks === 'object') {
+                Object.entries(parsedData.blocks).forEach(([blockName, block]) => {
+                  // Check if block name contains GEB/GEBERIT or if block has GEB/GEBERIT layer
+                  const isGebBlock = isGebLayer(blockName) || (block.layer && isGebLayer(block.layer));
+                  if (isGebBlock && block.text) {
+                    const cleanedText = cleanDxfText(block.text);
+                    if (cleanedText) gebCodes.push(cleanedText);
+                  }
+                  if (block.entities && Array.isArray(block.entities)) {
+                    block.entities.forEach(e => {
+                      if (e.layer && isGebLayer(e.layer) && e.text) {
+                        const cleanedText = cleanDxfText(e.text);
+                        if (cleanedText) gebCodes.push(cleanedText);
+                      }
+                    });
+                  }
+                });
+              }
+              // Remove duplicates and filter out empty strings
+              const uniqueGebCodes = [...new Set(gebCodes.filter(code => code.length > 0))];
+              if (uniqueGebCodes.length === 0) return null;
+              // Expand/collapse logic
+              const sectionId = 'article-codes';
+              const isExpanded = expandedSections[sectionId] ?? false;
+              return (
+                <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
+                  <button
+                    onClick={() => toggleSection(sectionId)}
+                    className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
+                  >
+                    <span className="text-base font-bold text-gray-800">GEB / GEBERIT Article Codes from DXF ({uniqueGebCodes.length} items)</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="p-4 max-h-96 overflow-auto">
+                      <ul className="list-disc pl-6">
+                        {uniqueGebCodes.map((t, idx) => (
+                          <li key={idx} className="mb-1 text-gray-700 text-sm">{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
-      {/* Article Code Block for GEB/GEBERIT text fields from parsed DXF data */}
-      {parsedData && (() => {
-        // Helper: check if layer name contains GEB or GEBERIT
-        const isGebLayer = layerName => typeof layerName === 'string' && /GEBRIT|GEB/i.test(layerName);
-        
-        const gebCodes = [];
-        
-        // From entities - check if entity's layer is GEB/GEBERIT related
-        if (Array.isArray(parsedData.entities)) {
-          parsedData.entities.forEach(entity => {
-            if (entity.layer && isGebLayer(entity.layer) && entity.text) {
-              // Clean and extract text from entities on GEB/GEBERIT layers
-              const cleanedText = cleanDxfText(entity.text);
-              if (cleanedText) gebCodes.push(cleanedText);
-            }
-          });
-        }
-        
-        // From blocks - check if block's layer is GEB/GEBERIT related or block name contains GEB/GEBERIT
-        if (parsedData.blocks && typeof parsedData.blocks === 'object') {
-          Object.entries(parsedData.blocks).forEach(([blockName, block]) => {
-            // Check if block name contains GEB/GEBERIT or if block has GEB/GEBERIT layer
-            const isGebBlock = isGebLayer(blockName) || (block.layer && isGebLayer(block.layer));
-            
-            if (isGebBlock && block.text) {
-              const cleanedText = cleanDxfText(block.text);
-              if (cleanedText) gebCodes.push(cleanedText);
-            }
-            
-            if (block.entities && Array.isArray(block.entities)) {
-              block.entities.forEach(e => {
-                if (e.layer && isGebLayer(e.layer) && e.text) {
-                  const cleanedText = cleanDxfText(e.text);
-                  if (cleanedText) gebCodes.push(cleanedText);
-                }
-              });
-            }
-          });
-        }
-        
-        // Remove duplicates and filter out empty strings
-        const uniqueGebCodes = [...new Set(gebCodes.filter(code => code.length > 0))];
-        
-        if (uniqueGebCodes.length === 0) return null;
-        
-        return (
-          <div className="border border-gray-400 rounded-lg bg-gray-50 mb-4">
-            <div className="px-4 py-3 font-medium text-gray-800 bg-gray-100 rounded-t-lg">
-              GEB / GEBERIT Article Codes from DXF ({uniqueGebCodes.length} items)
-            </div>
-            <div className="p-4 max-h-96 overflow-auto">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                {uniqueGebCodes.map(t => `• ${t}`).join('\n')}
-              </pre>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 };
