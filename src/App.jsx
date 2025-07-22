@@ -3,11 +3,40 @@ import DxfParser from 'dxf-parser';
 import { Upload, FileText, AlertCircle, CheckCircle, X, Loader2, Table } from 'lucide-react';
 // Removed import of gebElements, will use parsedData
 
+
 const DxfFileParser = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // Helper function to clean DXF text formatting codes
+  const cleanDxfText = (text) => {
+    if (typeof text !== 'string') return '';
+    
+    let cleaned = text;
+    
+    // Remove font formatting codes like {\fArial|b0|i0|c0|p34; ... }
+    cleaned = cleaned.replace(/\{\\f[^;]*;([^}]*)\}/g, '$1');
+    
+    // Remove any remaining curly braces formatting
+    cleaned = cleaned.replace(/\{[^}]*\}/g, '');
+    
+    // Handle DXF escape sequences
+    cleaned = cleaned.replace(/\\P/g, ' '); // Paragraph break -> space
+    cleaned = cleaned.replace(/%%C/g, '°'); // Degree symbol
+    cleaned = cleaned.replace(/%%D/g, '±'); // Plus/minus
+    cleaned = cleaned.replace(/%%U/g, ''); // Underline start
+    cleaned = cleaned.replace(/%%u/g, ''); // Underline end
+    cleaned = cleaned.replace(/%%O/g, ''); // Overline start
+    cleaned = cleaned.replace(/%%o/g, ''); // Overline end
+    cleaned = cleaned.replace(/%%\d+/g, ''); // Other %% codes
+    
+    // Remove extra whitespace and trim
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    return cleaned;
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -22,6 +51,7 @@ const DxfFileParser = () => {
       return;
     }
 
+
     // Validate file type
     const fileExtension = file.name.toLowerCase().split('.').pop();
     if (fileExtension !== 'dxf') {
@@ -30,18 +60,21 @@ const DxfFileParser = () => {
       return;
     }
 
+
     // Validate file size (optional - prevent very large files)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 150 * 1024 * 1024; // 150MB
     if (file.size > maxSize) {
-      setError('File size too large. Please select a file smaller than 50MB.');
+      setError('File size too large. Please select a file smaller than 150MB.');
       setSelectedFile(null);
       return;
     }
+
 
     setSelectedFile(file);
     // Automatically parse the file after selection
     parseDxfFile(file);
   };
+
 
   // Update parseDxfFile to accept a file argument (for auto-parse)
   const parseDxfFile = async (fileArg) => {
@@ -51,9 +84,11 @@ const DxfFileParser = () => {
       return;
     }
 
+
     setError(null);
     setSuccess(false);
     setParsedData(null);
+
 
     try {
       // Read file content using FileReader
@@ -64,17 +99,21 @@ const DxfFileParser = () => {
         reader.readAsText(fileToParse);
       });
 
+
       // Parse DXF content using dxf-parser
       const parser = new DxfParser();
       const dxfData = parser.parseSync(fileContent);
+
 
       if (!dxfData) {
         throw new Error('Failed to parse DXF file - invalid format or corrupted file');
       }
 
+
       setParsedData(dxfData);
       setSuccess(true);
       setError(null);
+
 
     } catch (err) {
       console.error('DXF Parsing Error:', err);
@@ -84,22 +123,10 @@ const DxfFileParser = () => {
     }
   };
 
-  const clearAll = () => {
-    setSelectedFile(null);
-    setParsedData(null);
-    setError(null);
-    setSuccess(false);
-    setExpandedSections({});
-    
-    // Reset file input
-    const fileInput = document.getElementById('dxf-file-input');
-    if (fileInput) {
-      fileInput.value = '';
-    }
-  };
 
   // State for expanded sections
   const [expandedSections, setExpandedSections] = useState({});
+
 
   const toggleSection = (sectionId) => {
     setExpandedSections(prev => ({
@@ -108,12 +135,15 @@ const DxfFileParser = () => {
     }));
   };
 
+
   const renderDataSection = (title, data, sectionId, isExpandable = true) => {
     if (!data) return null;
+
 
     const dataString = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
     const isLarge = dataString.length > 500;
     const isExpanded = expandedSections[sectionId] || false;
+
 
     return (
       <div className="border border-gray-300 rounded-lg mb-4">
@@ -140,6 +170,7 @@ const DxfFileParser = () => {
     );
   };
 
+
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white">
       <div className="mb-8">
@@ -147,24 +178,22 @@ const DxfFileParser = () => {
         <p className="text-gray-600">Upload and parse DXF files to view their structure and data</p>
       </div>
 
+
       {/* File Upload Section */}
-      <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6">
+      <label htmlFor="dxf-file-input" className="block cursor-pointer bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6 transition hover:bg-gray-100 focus-within:bg-gray-100">
         <div className="text-center">
           <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <div className="mb-4">
-            <label htmlFor="dxf-file-input" className="cursor-pointer">
-              <span className="text-lg font-medium text-gray-700">Choose DXF File</span>
-              <input
-                id="dxf-file-input"
-                type="file"
-                accept=".dxf"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </label>
+            <span className="text-lg font-medium text-gray-700">Choose DXF File</span>
+            <input
+              id="dxf-file-input"
+              type="file"
+              accept=".dxf"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
           <p className="text-sm text-gray-500 mb-4">Select a .dxf file to parse and analyze</p>
-          
           {selectedFile && (
             <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 inline-block">
               <div className="flex items-center space-x-2">
@@ -175,18 +204,12 @@ const DxfFileParser = () => {
             </div>
           )}
         </div>
-      </div>
+      </label>
+
 
       {/* Action Buttons */}
-      <div className="flex space-x-4 mb-6">
-        <button
-          onClick={clearAll}
-          className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-6 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <X className="h-4 w-4" />
-          <span>Clear All</span>
-        </button>
-      </div>
+      {/* Removed Clear All button as per request */}
+
 
       {/* Status Messages */}
       {error && (
@@ -199,6 +222,7 @@ const DxfFileParser = () => {
         </div>
       )}
 
+
       {success && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
@@ -208,6 +232,7 @@ const DxfFileParser = () => {
           <p className="text-green-600 mt-1">DXF file parsed successfully!</p>
         </div>
       )}
+
 
       {/* Parsed Data Display */}
       {parsedData && (
@@ -278,6 +303,7 @@ const DxfFileParser = () => {
                 );
               })()
             )}
+
 
             {/* GEB/GEBERIT All Elements Section */}
             {parsedData && (() => {
@@ -451,53 +477,57 @@ const DxfFileParser = () => {
       )}
       {/* Article Code Block for GEB/GEBERIT text fields from parsed DXF data */}
       {parsedData && (() => {
-        // Helper: is GEB/Geberit related if any string field contains GEB or GEBERIT
-        const isGebRelated = obj => Object.values(obj).some(
-          v => typeof v === 'string' && /GEBRIT|GEB/i.test(v)
-        );
-        // Helper: extract article code (substring with GEB or GEBRIT and following words/numbers)
-        const extractGebCode = text => {
-          if (typeof text !== 'string') return null;
-          // Match GEB or GEBRIT, followed by up to 20 word/hyphen/space chars, then a number (with optional decimal)
-          const match = text.match(/(GEB(?:RIT)?(?:[\w\- ]{0,20})?\d+[.\d]*)/i);
-          return match ? match[0].trim() : null;
-        };
+        // Helper: check if layer name contains GEB or GEBERIT
+        const isGebLayer = layerName => typeof layerName === 'string' && /GEBRIT|GEB/i.test(layerName);
+        
         const gebCodes = [];
-        // From entities
+        
+        // From entities - check if entity's layer is GEB/GEBERIT related
         if (Array.isArray(parsedData.entities)) {
           parsedData.entities.forEach(entity => {
-            if (isGebRelated(entity) && entity.text) {
-              const code = extractGebCode(entity.text);
-              if (code) gebCodes.push(code);
+            if (entity.layer && isGebLayer(entity.layer) && entity.text) {
+              // Clean and extract text from entities on GEB/GEBERIT layers
+              const cleanedText = cleanDxfText(entity.text);
+              if (cleanedText) gebCodes.push(cleanedText);
             }
           });
         }
-        // From blocks
+        
+        // From blocks - check if block's layer is GEB/GEBERIT related or block name contains GEB/GEBERIT
         if (parsedData.blocks && typeof parsedData.blocks === 'object') {
-          Object.values(parsedData.blocks).forEach(block => {
-            if (isGebRelated(block) && block.text) {
-              const code = extractGebCode(block.text);
-              if (code) gebCodes.push(code);
+          Object.entries(parsedData.blocks).forEach(([blockName, block]) => {
+            // Check if block name contains GEB/GEBERIT or if block has GEB/GEBERIT layer
+            const isGebBlock = isGebLayer(blockName) || (block.layer && isGebLayer(block.layer));
+            
+            if (isGebBlock && block.text) {
+              const cleanedText = cleanDxfText(block.text);
+              if (cleanedText) gebCodes.push(cleanedText);
             }
+            
             if (block.entities && Array.isArray(block.entities)) {
               block.entities.forEach(e => {
-                if (isGebRelated(e) && e.text) {
-                  const code = extractGebCode(e.text);
-                  if (code) gebCodes.push(code);
+                if (e.layer && isGebLayer(e.layer) && e.text) {
+                  const cleanedText = cleanDxfText(e.text);
+                  if (cleanedText) gebCodes.push(cleanedText);
                 }
               });
             }
           });
         }
-        if (gebCodes.length === 0) return null;
+        
+        // Remove duplicates and filter out empty strings
+        const uniqueGebCodes = [...new Set(gebCodes.filter(code => code.length > 0))];
+        
+        if (uniqueGebCodes.length === 0) return null;
+        
         return (
           <div className="border border-gray-400 rounded-lg bg-gray-50 mb-4">
             <div className="px-4 py-3 font-medium text-gray-800 bg-gray-100 rounded-t-lg">
-              GEB / GEBERIT Article Codes from DXF
+              GEB / GEBERIT Article Codes from DXF ({uniqueGebCodes.length} items)
             </div>
             <div className="p-4 max-h-96 overflow-auto">
               <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                {gebCodes.map(t => `• ${t}`).join('\n')}
+                {uniqueGebCodes.map(t => `• ${t}`).join('\n')}
               </pre>
             </div>
           </div>
@@ -506,5 +536,6 @@ const DxfFileParser = () => {
     </div>
   );
 };
+
 
 export default DxfFileParser;
