@@ -524,6 +524,23 @@ const DxfFileParser = () => {
                     <span className="text-base font-bold text-gray-800">GEB / GEBERIT Article Codes from DXF ({uniqueGebCodes.length} items)</span>
                     <span className="flex items-center gap-2">
                       <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          const blob = new Blob([JSON.stringify(uniqueGebCodes, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'article-codes.json';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                      >
+                        Download JSON
+                      </button>
                     </span>
                   </button>
                   {isExpanded && (
