@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import DxfParser from 'dxf-parser';
 import { Upload, FileText, AlertCircle, CheckCircle, X, Loader2, Table } from 'lucide-react';
+import { utils as XLSXUtils, writeFile as XLSXWriteFile } from 'xlsx';
 // Removed import of gebElements, will use parsedData
 
 
@@ -127,6 +128,32 @@ const DxfFileParser = () => {
   };
 
 
+  // Helper to download Excel for a given data and sheet name
+  const downloadExcel = (data, sheetName, fileName) => {
+    let ws;
+    if (Array.isArray(data)) {
+      if (data.length > 0 && typeof data[0] === 'object') {
+        // Add Serial No. column
+        const dataWithSerial = data.map((row, idx) => ({ 'Serial No.': idx + 1, ...row }));
+        ws = XLSXUtils.json_to_sheet(dataWithSerial);
+      } else {
+        // For arrays of strings (e.g., article codes)
+        ws = XLSXUtils.aoa_to_sheet([["Serial No.", sheetName]]);
+        data.forEach((val, idx) => {
+          XLSXUtils.sheet_add_aoa(ws, [[idx + 1, val]], { origin: -1 });
+        });
+      }
+    } else if (typeof data === 'object') {
+      ws = XLSXUtils.json_to_sheet([{ 'Serial No.': 1, ...data }]);
+    } else {
+      ws = XLSXUtils.aoa_to_sheet([["Serial No.", "Value"], [1, String(data)]]);
+    }
+    const wb = XLSXUtils.book_new();
+    XLSXUtils.book_append_sheet(wb, ws, sheetName);
+    XLSXWriteFile(wb, fileName);
+  };
+
+
   // State for expanded sections
   const [expandedSections, setExpandedSections] = useState({});
 
@@ -233,8 +260,10 @@ const DxfFileParser = () => {
                 };
                 return (
                   <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
-                    <button
+                    <div
                       onClick={() => toggleSection(sectionId)}
+                      role="button"
+                      tabIndex={0}
                       className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                     >
                       <span className="text-base font-bold text-gray-800">Header Information</span>
@@ -247,7 +276,7 @@ const DxfFileParser = () => {
                           Download JSON
                         </button>
                       </span>
-                    </button>
+                    </div>
                     {isExpanded && (
                       <div className="p-4 bg-white rounded-b-lg">
                         <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
@@ -259,6 +288,53 @@ const DxfFileParser = () => {
                 );
               })()
             )}
+            {/* Move Complete Data Structure block here, under Header Information */}
+            <div>
+              {(() => {
+                const sectionId = 'complete';
+                const isExpanded = expandedSections[sectionId] || false;
+                const handleDownloadComplete = (e) => {
+                  e.stopPropagation();
+                  const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'dxf-parsed-data.json';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                };
+                return (
+                  <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
+                    <div
+                      onClick={() => toggleSection(sectionId)}
+                      role="button"
+                      tabIndex={0}
+                      className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
+                    >
+                      <span className="text-base font-bold text-gray-800">Complete Data Structure</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
+                        <button
+                          onClick={handleDownloadComplete}
+                          className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                        >
+                          Download JSON
+                        </button>
+                      </span>
+                    </div>
+                    {isExpanded && (
+                      <div className="p-4 bg-white rounded-b-lg">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
+                          {JSON.stringify(parsedData, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
             
             {/* GEB/GEBERIT Layers Section */}
             {parsedData.tables && parsedData.tables.layer && (
@@ -286,8 +362,10 @@ const DxfFileParser = () => {
                 };
                 return (
                   <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
-                    <button
+                    <div
                       onClick={() => toggleSection(sectionId)}
+                      role="button"
+                      tabIndex={0}
                       className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                     >
                       <span className="text-base font-bold text-gray-800">GEB / GEBERIT Layers ({gebLayers.length})</span>
@@ -299,8 +377,25 @@ const DxfFileParser = () => {
                         >
                           Download JSON
                         </button>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            // Prepare rows for Excel: columns are name, frozen, visible, colorIndex, color
+                            const gebLayerRows = gebLayers.map(([layerName, layerData]) => ({
+                              name: layerName,
+                              frozen: layerData?.frozen ?? '',
+                              visible: layerData?.visible ?? '',
+                              colorIndex: layerData?.colorIndex ?? '',
+                              color: layerData?.color ?? '',
+                            }));
+                            downloadExcel(gebLayerRows, 'GEB-GEBERIT Layers', 'geb-geberit-layers.xlsx');
+                          }}
+                          className="ml-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                        >
+                          Download Excel
+                        </button>
                       </span>
-                    </button>
+                    </div>
                     {isExpanded && (
                       <div className="p-4 max-h-96 overflow-auto">
                         <ul className="list-disc pl-6">
@@ -362,8 +457,10 @@ const DxfFileParser = () => {
               };
               return (
                 <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
-                  <button
+                  <div
                     onClick={() => toggleSection(sectionId)}
+                    role="button"
+                    tabIndex={0}
                     className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                   >
                     <span className="text-base font-bold text-gray-800">All Elements Related to GEB / GEBERIT</span>
@@ -375,16 +472,109 @@ const DxfFileParser = () => {
                       >
                         Download JSON
                       </button>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          // Prepare Entities sheet
+                          const entitiesSheet = gebEntities.map((entity, idx) => ({
+                            'Serial No.': idx + 1,
+                            type: entity.type ?? '',
+                            handle: entity.handle ?? '',
+                            ownerHandle: entity.ownerHandle ?? '',
+                            layer: entity.layer ?? '',
+                            name: entity.name ?? '',
+                            lineType: entity.lineType ?? '',
+                            lineweight: entity.lineweight ?? '',
+                            colorIndex: entity.colorIndex ?? '',
+                            color: entity.color ?? '',
+                            position_x: entity.position?.x ?? '',
+                            position_y: entity.position?.y ?? '',
+                            position_z: entity.position?.z ?? '',
+                            rotation: entity.rotation ?? '',
+                            xScale: entity.xScale ?? '',
+                            vertices: entity.vertices ? JSON.stringify(entity.vertices) : '',
+                            center_x: entity.center?.x ?? '',
+                            center_y: entity.center?.y ?? '',
+                            center_z: entity.center?.z ?? '',
+                            radius: entity.radius ?? '',
+                            text: entity.text ?? '',
+                            textHeight: entity.textHeight ?? '',
+                            startPoint_x: entity.startPoint?.x ?? '',
+                            startPoint_y: entity.startPoint?.y ?? '',
+                            startPoint_z: entity.startPoint?.z ?? '',
+                            endPoint_x: entity.endPoint?.x ?? '',
+                            endPoint_y: entity.endPoint?.y ?? '',
+                            endPoint_z: entity.endPoint?.z ?? '',
+                            lineTypeScale: entity.lineTypeScale ?? '',
+                            shape: entity.shape ?? '',
+                            hasContinuousLinetypePattern: entity.hasContinuousLinetypePattern ?? '',
+                            width: entity.width ?? '',
+                            otherProps: (() => {
+                              const omit = [
+                                'type','handle','ownerHandle','layer','name','lineType','lineweight','colorIndex','color','position','rotation','xScale','vertices','center','radius','text','textHeight','startPoint','endPoint','lineTypeScale','shape','hasContinuousLinetypePattern','width'
+                              ];
+                              const rest = Object.fromEntries(Object.entries(entity).filter(([k]) => !omit.includes(k)));
+                              return Object.keys(rest).length ? JSON.stringify(rest) : '';
+                            })(),
+                          }));
+                          // Prepare Blocks sheet
+                          const blocksSheet = gebBlocks.map(([blockName, block], idx) => ({
+                            'Serial No.': idx + 1,
+                            block_name: blockName,
+                            handle: block.handle ?? '',
+                            ownerHandle: block.ownerHandle ?? '',
+                            layer: block.layer ?? '',
+                            name2: block.name2 ?? '',
+                            xrefPath: block.xrefPath ?? '',
+                            position_x: block.position?.x ?? '',
+                            position_y: block.position?.y ?? '',
+                            position_z: block.position?.z ?? '',
+                            entities_count: Array.isArray(block.entities) ? block.entities.length : '',
+                            otherProps: (() => {
+                              const omit = [
+                                'handle','ownerHandle','layer','name2','xrefPath','position','entities'
+                              ];
+                              const rest = Object.fromEntries(Object.entries(block).filter(([k]) => !omit.includes(k)));
+                              return Object.keys(rest).length ? JSON.stringify(rest) : '';
+                            })(),
+                          }));
+                          // Prepare Layers sheet
+                          const layersSheet = gebLayers.map(([layerName, layerData], idx) => ({
+                            'Serial No.': idx + 1,
+                            layer_name: layerName,
+                            name: layerData?.name ?? '',
+                            frozen: layerData?.frozen ?? '',
+                            visible: layerData?.visible ?? '',
+                            colorIndex: layerData?.colorIndex ?? '',
+                            color: layerData?.color ?? '',
+                          }));
+                          // Create workbook with three sheets
+                          const wb = XLSXUtils.book_new();
+                          if (entitiesSheet.length) {
+                            XLSXUtils.book_append_sheet(wb, XLSXUtils.json_to_sheet(entitiesSheet), 'Entities');
+                          }
+                          if (blocksSheet.length) {
+                            XLSXUtils.book_append_sheet(wb, XLSXUtils.json_to_sheet(blocksSheet), 'Blocks');
+                          }
+                          if (layersSheet.length) {
+                            XLSXUtils.book_append_sheet(wb, XLSXUtils.json_to_sheet(layersSheet), 'Layers');
+                          }
+                          XLSXWriteFile(wb, 'all-geb-geberit-elements.xlsx');
+                        }}
+                        className="ml-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                      >
+                        Download Excel
+                      </button>
                     </span>
-                  </button>
+                  </div>
                   {isExpanded && (
                     <div className="p-4 space-y-4 max-h-96 overflow-auto">
                       {gebEntities.length > 0 && (
                         <div>
                           <div className="font-semibold text-gray-800 mb-2">Entities ({gebEntities.length})</div>
                           <ul className="list-decimal pl-6">
-                            {gebEntities.map((entity, i) => (
-                              <li key={entity.handle || i} className="mb-2">
+                            {gebEntities.map((entity, idx) => (
+                              <li key={idx} className="mb-2">
                                 <pre className="text-xs text-gray-700 bg-gray-100 rounded p-2 whitespace-pre-wrap overflow-auto max-w-full">
                                   {JSON.stringify(entity, null, 2)}
                                 </pre>
@@ -429,52 +619,6 @@ const DxfFileParser = () => {
               );
             })()}
             
-            {/* Complete Data Structure */}
-            <div>
-              {(() => {
-                const sectionId = 'complete';
-                const isExpanded = expandedSections[sectionId] || false;
-                const handleDownloadComplete = (e) => {
-                  e.stopPropagation();
-                  const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'dxf-parsed-data.json';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                };
-                return (
-                  <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
-                    <button
-                      onClick={() => toggleSection(sectionId)}
-                      className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
-                    >
-                      <span className="text-base font-bold text-gray-800">Complete Data Structure</span>
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500 font-normal">{isExpanded ? 'Click to collapse' : 'Click to expand'}</span>
-                        <button
-                          onClick={handleDownloadComplete}
-                          className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
-                        >
-                          Download JSON
-                        </button>
-                      </span>
-                    </button>
-                    {isExpanded && (
-                      <div className="p-4 bg-white rounded-b-lg">
-                        <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
-                          {JSON.stringify(parsedData, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-            
             {/* Article Code Block for GEB/GEBERIT text fields from parsed DXF data */}
             {parsedData && (() => {
               // Helper: check if layer name contains GEB or GEBERIT
@@ -517,8 +661,10 @@ const DxfFileParser = () => {
               const isExpanded = expandedSections[sectionId] ?? false;
               return (
                 <div className="border border-gray-300 rounded-lg mb-4 bg-gray-50">
-                  <button
+                  <div
                     onClick={() => toggleSection(sectionId)}
+                    role="button"
+                    tabIndex={0}
                     className="w-full px-4 py-3 text-left font-bold text-gray-800 bg-gray-100 rounded-t-lg hover:bg-gray-200 flex justify-between items-center cursor-pointer"
                   >
                     <span className="text-base font-bold text-gray-800">GEB / GEBERIT Article Codes from DXF ({uniqueGebCodes.length} items)</span>
@@ -541,8 +687,17 @@ const DxfFileParser = () => {
                       >
                         Download JSON
                       </button>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          downloadExcel(uniqueGebCodes, 'Article Codes', 'article-codes.xlsx');
+                        }}
+                        className="ml-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                      >
+                        Download Excel
+                      </button>
                     </span>
-                  </button>
+                  </div>
                   {isExpanded && (
                     <div className="p-4 max-h-96 overflow-auto">
                       <ul className="list-disc pl-6">
